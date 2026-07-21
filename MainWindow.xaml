@@ -1,0 +1,44 @@
+<Window x:Class="XGecuMetaCleaner.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="XGecu Meta Cleaner" Width="720" Height="360"
+    MinWidth="720" MinHeight="360" FontFamily="Segoe UI" FontSize="13">
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="File" VerticalAlignment="Center" Margin="0,0,8,0" />
+            <TextBox x:Name="FilePathBox" Grid.Column="1" Height="52" IsReadOnly="True"
+                VerticalScrollBarVisibility="Auto" TextWrapping="NoWrap" />
+            <Button Grid.Column="2" Content="Browse..." Width="88" Height="26" Margin="8,0,0,0"
+                Click="Browse_Click" />
+            <Button Grid.Column="3" Content="Clear" Width="72" Height="26" Margin="6,0,0,0"
+                Click="ClearSelection_Click" />
+        </Grid>
+
+        <TextBlock Grid.Row="1" Margin="0,10,0,0"
+            Text="Remove metadata by XGecu Programmer" />
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,12,0,8">
+            <CheckBox x:Name="BackupCheckBox" Content="Create numbered .bak before cleaning"
+                IsChecked="True" VerticalAlignment="Center" />
+            <Button Content="Clean file" Width="92" Height="28" Margin="18,0,0,0"
+                Click="Clean_Click" />
+        </StackPanel>
+
+        <TextBox x:Name="LogBox" Grid.Row="3" FontFamily="Consolas" FontSize="12"
+            IsReadOnly="True" VerticalScrollBarVisibility="Auto"
+            HorizontalScrollBarVisibility="Auto" TextWrapping="NoWrap" />
+    </Grid>
+</Window>

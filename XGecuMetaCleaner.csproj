@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <AssemblyName>XGecu Meta Cleaner</AssemblyName>
+    <RootNamespace>XGecuMetaCleaner</RootNamespace>
+    <Version>1.0.0</Version>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <Product>XGecu Meta Cleaner</Product>
+    <Description>XGecu Meta Cleaner</Description>
+    <Company>mhqb365.com</Company>
+    <Authors>mhqb365.com</Authors>
+    <Copyright>mhqb365.com</Copyright>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <GenerateBindingRedirectsOutputType>false</GenerateBindingRedirectsOutputType>
+    <AutoGenerateBindingRedirects>false</AutoGenerateBindingRedirects>
+  </PropertyGroup>
+  <Target Name="KeepReleaseOutputExeOnly" AfterTargets="Build"
+    Condition="'$(Configuration)' == 'Release'">
+    <Delete Files="$(TargetDir)$(TargetFileName).config;$(TargetDir)$(TargetName).pdb" />
+  </Target>
+</Project>
