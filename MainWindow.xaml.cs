@@ -20,7 +20,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        Title = "XGecu Meta Cleaner v" + GitHubUpdateChecker.CurrentVersion.ToString(3);
+        Title = "XGecu Meta Cleaner v" + GitHubUpdateChecker.CurrentDisplayVersion;
         AppendLog("Ready");
         Loaded += MainWindow_Loaded;
     }
