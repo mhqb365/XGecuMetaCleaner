@@ -23,6 +23,7 @@
     <AutoGenerateBindingRedirects>false</AutoGenerateBindingRedirects>
   </PropertyGroup>
   <Target Name="KeepOutputExeOnly" AfterTargets="Build">
-    <Delete Files="$(TargetPath).config;$(TargetDir)$(TargetName).exe.config;$(TargetDir)$(TargetName).pdb" />
+    <Delete
+      Files="$(TargetPath).config;$(TargetDir)$(TargetName).exe.config;$(TargetDir)$(TargetName).pdb" />
   </Target>
 </Project>

@@ -35,6 +35,8 @@
                 IsChecked="True" VerticalAlignment="Center" />
             <Button Content="Clean metadata" Width="112" Height="28" Margin="18,0,0,0"
                 Click="Clean_Click" />
+            <Button x:Name="FindWinKeyButton" Content="Find WinKey" Width="92" Height="28" Margin="8,0,0,0"
+                Click="FindWinKey_Click" />
         </StackPanel>
 
         <TextBox x:Name="LogBox" Grid.Row="3" FontFamily="Consolas" FontSize="12"

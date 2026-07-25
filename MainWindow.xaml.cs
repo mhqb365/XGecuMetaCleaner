@@ -2,6 +2,7 @@ using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading.Tasks;
 using System.Windows;
 
 namespace XGecuMetaCleaner
@@ -47,9 +48,7 @@ public partial class MainWindow : Window
 
     private void Clean_Click(object sender, RoutedEventArgs e)
     {
-        var files = _selectedFiles.Length > 0
-            ? _selectedFiles
-            : string.IsNullOrWhiteSpace(FilePathBox.Text) ? new string[0] : new[] { FilePathBox.Text.Trim() };
+        var files = GetSelectedFiles();
         if (files.Length == 0)
         {
             MessageBox.Show(this, "Please select file(s) first", "Clean", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -78,6 +77,81 @@ public partial class MainWindow : Window
         }
 
         MessageBox.Show(this, "Clean completed\r\nOK: " + ok + "\r\nFailed/skipped: " + failed, "Clean", MessageBoxButton.OK, failed == 0 ? MessageBoxImage.Information : MessageBoxImage.Warning);
+    }
+
+    private async void FindWinKey_Click(object sender, RoutedEventArgs e)
+    {
+        var files = GetSelectedFiles();
+        if (files.Length == 0)
+        {
+            MessageBox.Show(this, "Please select file(s) first", "Find WinKey", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        FindWinKeyButton.IsEnabled = false;
+        AppendLog("Find WinKey started");
+        try
+        {
+            var result = await Task.Run(() => FindWinKeys(files));
+            foreach (var line in result.LogLines)
+            {
+                AppendLog(line);
+            }
+
+            MessageBox.Show(this, "Find completed\r\nCandidates: " + result.Total + "\r\nFailed: " + result.Failed, "Find WinKey", MessageBoxButton.OK, result.Total > 0 && result.Failed == 0 ? MessageBoxImage.Information : MessageBoxImage.Warning);
+        }
+        finally
+        {
+            FindWinKeyButton.IsEnabled = true;
+        }
+    }
+
+    private static WinKeyFindResult FindWinKeys(string[] files)
+    {
+        var result = new WinKeyFindResult();
+        foreach (var path in files)
+        {
+            result.LogLines.Add("Finding WinKey in " + path);
+            try
+            {
+                if (!File.Exists(path))
+                {
+                    result.LogLines.Add("File does not exist: " + path);
+                    result.Failed++;
+                    continue;
+                }
+
+                var candidates = WinKeyFinder.Find(File.ReadAllBytes(path));
+                if (candidates.Count == 0)
+                {
+                    result.LogLines.Add("No plaintext Windows product key candidate found");
+                    continue;
+                }
+
+                result.Total += candidates.Count;
+                foreach (var candidate in candidates)
+                {
+                    result.LogLines.Add(candidate.Key
+                        + " | offset 0x" + candidate.Offset.ToString("X")
+                        + " | " + candidate.Method
+                        + " | " + candidate.Classification);
+                }
+            }
+            catch (Exception ex)
+            {
+                result.Failed++;
+                result.LogLines.Add("Find WinKey failed: " + ex.Message);
+            }
+        }
+
+        return result;
+    }
+
+    private string[] GetSelectedFiles()
+    {
+        return _selectedFiles.Length > 0
+            ? _selectedFiles
+            : string.IsNullOrWhiteSpace(FilePathBox.Text) ? new string[0] : new[] { FilePathBox.Text.Trim() };
     }
 
     public static CleanResult CleanFile(string path, bool createBackup)
@@ -219,5 +293,12 @@ public sealed class CleanResult
     {
         return new CleanResult(false, message, logLines);
     }
+}
+
+public sealed class WinKeyFindResult
+{
+    public int Total { get; set; }
+    public int Failed { get; set; }
+    public List<string> LogLines { get; } = new List<string>();
 }
 }
