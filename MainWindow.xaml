@@ -37,6 +37,8 @@
                 Click="Clean_Click" />
             <Button x:Name="FindWinKeyButton" Content="Find WinKey" Width="92" Height="28" Margin="8,0,0,0"
                 Click="FindWinKey_Click" />
+            <Button Content="About" Width="72" Height="28" Margin="8,0,0,0"
+                Click="About_Click" />
         </StackPanel>
 
         <TextBox x:Name="LogBox" Grid.Row="3" FontFamily="Consolas" FontSize="12"

@@ -20,7 +20,14 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        Title = "XGecu Meta Cleaner v" + GitHubUpdateChecker.CurrentVersion.ToString(3);
         AppendLog("Ready");
+        Loaded += MainWindow_Loaded;
+    }
+
+    private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
+    {
+        await GitHubUpdateChecker.CheckForUpdatesAsync(this);
     }
 
     private void Browse_Click(object sender, RoutedEventArgs e)
@@ -44,6 +51,11 @@ public partial class MainWindow : Window
         _selectedFiles = new string[0];
         FilePathBox.Clear();
         AppendLog("Selection cleared");
+    }
+
+    private void About_Click(object sender, RoutedEventArgs e)
+    {
+        GitHubUpdateChecker.OpenRepository();
     }
 
     private void Clean_Click(object sender, RoutedEventArgs e)
