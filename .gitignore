@@ -1,2 +1,11 @@
 bin
 obj
+
+.agent
+.agents
+.codex
+skills
+AGENTS_CODEX.md
+AGENTS.md
+GEMINI.md
+ERRORS.md

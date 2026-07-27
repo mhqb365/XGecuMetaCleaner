@@ -19,6 +19,11 @@ public sealed class WinKeyCandidate
 public static class WinKeyFinder
 {
     private const int KeyLength = 29;
+    private const int LenovoLenvHeaderLength = 0x10;
+    private const int LenovoLenvBlockLength = 0x1000;
+    private const int LenovoLenvEntryHeaderLength = 0x18;
+    private const int LenovoLenvMaxEntries = 256;
+    private static readonly byte[] LenovoLenvMarker = Encoding.ASCII.GetBytes("LENV");
     private static readonly byte[] OemMarker =
     {
         0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -55,6 +60,7 @@ public static class WinKeyFinder
 
         AddBinaryMarkerMatches(buffer, byOffset);
         AddAsciiMarkerMatches(buffer, "MSDM", 512, "ACPI MSDM", byOffset);
+        AddLenovoLenvDmiMatches(buffer, byOffset);
         foreach (var anchor in Anchors)
         {
             AddAsciiMarkerMatches(buffer, anchor, 768, "Near " + anchor, byOffset);
@@ -80,6 +86,114 @@ public static class WinKeyFinder
         {
             AddRangeMatches(buffer, markerOffset + OemMarker.Length, 256, "Hex marker", byOffset);
         }
+    }
+
+    private static void AddLenovoLenvDmiMatches(byte[] buffer, Dictionary<int, WinKeyCandidate> byOffset)
+    {
+        foreach (var blockOffset in FindAll(buffer, LenovoLenvMarker, 0))
+        {
+            if (blockOffset + LenovoLenvHeaderLength >= buffer.Length)
+            {
+                continue;
+            }
+
+            var blockLength = Math.Min(LenovoLenvBlockLength, buffer.Length - blockOffset);
+            var bodyLength = blockLength - LenovoLenvHeaderLength;
+            if (bodyLength < LenovoLenvEntryHeaderLength)
+            {
+                continue;
+            }
+
+            var decodedBody = new byte[bodyLength];
+            var xorKey = buffer[blockOffset + 0x0D];
+            for (var index = 0; index < decodedBody.Length; index++)
+            {
+                decodedBody[index] = (byte)(buffer[blockOffset + LenovoLenvHeaderLength + index] ^ xorKey);
+            }
+
+            if (!AddLenovoLenvEntryMatches(decodedBody, blockOffset + LenovoLenvHeaderLength, buffer, blockOffset, byOffset))
+            {
+                AddDecodedRangeMatches(decodedBody, 0, decodedBody.Length, blockOffset + LenovoLenvHeaderLength, "Lenovo LENV XOR DMI", byOffset);
+            }
+        }
+    }
+
+    private static bool AddLenovoLenvEntryMatches(byte[] decodedBody, int bodyBaseOffset, byte[] originalBuffer, int blockOffset, Dictionary<int, WinKeyCandidate> byOffset)
+    {
+        var entryCount = ReadUInt32LittleEndian(originalBuffer, blockOffset + 0x08);
+        if (entryCount <= 0 || entryCount > LenovoLenvMaxEntries)
+        {
+            return false;
+        }
+
+        var foundEntry = false;
+        var entryOffset = 0;
+        for (var entryIndex = 0; entryIndex < entryCount; entryIndex++)
+        {
+            if (entryOffset + LenovoLenvEntryHeaderLength > decodedBody.Length)
+            {
+                break;
+            }
+
+            var dataSize = ReadUInt32LittleEndian(decodedBody, entryOffset + 0x10);
+            if (dataSize < 0 || dataSize > decodedBody.Length - entryOffset - LenovoLenvEntryHeaderLength)
+            {
+                break;
+            }
+
+            foundEntry = true;
+            AddDecodedRangeMatches(
+                decodedBody,
+                entryOffset + LenovoLenvEntryHeaderLength,
+                dataSize,
+                bodyBaseOffset,
+                "Lenovo LENV XOR DMI",
+                byOffset);
+            entryOffset += LenovoLenvEntryHeaderLength + dataSize;
+        }
+
+        return foundEntry;
+    }
+
+    private static void AddDecodedRangeMatches(byte[] buffer, int start, int length, int baseOffset, string method, Dictionary<int, WinKeyCandidate> byOffset)
+    {
+        if (start < 0 || start >= buffer.Length || length <= 0)
+        {
+            return;
+        }
+
+        var end = Math.Min(buffer.Length, start + length);
+        for (var offset = start; offset <= end - KeyLength; offset++)
+        {
+            var key = TryReadKey(buffer, offset);
+            if (key == null)
+            {
+                continue;
+            }
+
+            var originalOffset = baseOffset + offset;
+            if (!byOffset.TryGetValue(originalOffset, out var existing) || MethodPriority(method) < MethodPriority(existing.Method))
+            {
+                byOffset[originalOffset] = new WinKeyCandidate
+                {
+                    Method = method,
+                    Offset = originalOffset,
+                    Key = key,
+                    Length = KeyLength
+                };
+            }
+        }
+    }
+
+    private static int ReadUInt32LittleEndian(byte[] buffer, int offset)
+    {
+        if (offset < 0 || offset + 4 > buffer.Length)
+        {
+            return -1;
+        }
+
+        var value = BitConverter.ToUInt32(buffer, offset);
+        return value > int.MaxValue ? -1 : (int)value;
     }
 
     private static void AddAsciiMarkerMatches(byte[] buffer, string marker, int windowLength, string method, Dictionary<int, WinKeyCandidate> byOffset)
@@ -216,6 +330,11 @@ public static class WinKeyFinder
             || string.Equals(method, "ACPI MSDM", StringComparison.Ordinal))
         {
             return "likely OEM:DM embedded key";
+        }
+
+        if (string.Equals(method, "Lenovo LENV XOR DMI", StringComparison.Ordinal))
+        {
+            return "likely Lenovo XOR-decoded DMI/OEM key";
         }
 
         if (method.IndexOf("DigitalProductId", StringComparison.OrdinalIgnoreCase) >= 0)
@@ -361,12 +480,17 @@ public static class WinKeyFinder
             return 1;
         }
 
-        if (method != null && method.StartsWith("Near ", StringComparison.Ordinal))
+        if (string.Equals(method, "Lenovo LENV XOR DMI", StringComparison.Ordinal))
         {
             return 2;
         }
 
-        return 3;
+        if (method != null && method.StartsWith("Near ", StringComparison.Ordinal))
+        {
+            return 3;
+        }
+
+        return 4;
     }
 
     [DllImport("pidgenx.dll", CharSet = CharSet.Unicode, EntryPoint = "PidGenX")]

@@ -2,13 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.IO.Compression;
 using System.Linq;
 using System.Net.Http;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using System.Windows;
 
 namespace XGecuMetaCleaner
 {
@@ -68,74 +66,9 @@ public static class GitHubUpdateChecker
         return release != null && release.Version > NormalizeVersion3(CurrentVersion);
     }
 
-    public static async Task CheckForUpdatesAsync(Window owner)
-    {
-        try
-        {
-            var release = await GetLatestReleaseAsync();
-            if (!IsNewerThanCurrent(release))
-            {
-                return;
-            }
-
-            var choice = MessageBox.Show(
-                owner,
-                "New version available: " + FormatVersion(release.Version) + "\r\nCurrent version: " + CurrentDisplayVersion + "\r\n\r\nDownload, install, and restart now?",
-                "XGecu Meta Cleaner Update",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Information);
-            if (choice == MessageBoxResult.Yes)
-            {
-                if (string.IsNullOrWhiteSpace(release.AssetUrl))
-                {
-                    MessageBox.Show(owner, "No .zip release asset found for this version.", "XGecu Meta Cleaner Update", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return;
-                }
-
-                await DownloadInstallAndRestartAsync(release);
-                Application.Current.Shutdown();
-            }
-        }
-        catch
-        {
-            // Update check is best-effort; never block the app when offline or GitHub is unavailable.
-        }
-    }
-
     public static void OpenRepository()
     {
         OpenUrl(RepositoryUrl);
-    }
-
-    private static async Task DownloadInstallAndRestartAsync(GitHubReleaseInfo release)
-    {
-        var updateRoot = Path.Combine(Path.GetTempPath(), "XGecuMetaCleanerUpdate-" + Guid.NewGuid().ToString("N"));
-        var zipPath = Path.Combine(updateRoot, release.AssetName);
-        var extractPath = Path.Combine(updateRoot, "extracted");
-        Directory.CreateDirectory(updateRoot);
-        Directory.CreateDirectory(extractPath);
-
-        using (var client = new HttpClient())
-        {
-            client.Timeout = TimeSpan.FromMinutes(3);
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("XGecuMetaCleaner/" + CurrentVersion);
-            var bytes = await client.GetByteArrayAsync(release.AssetUrl);
-            File.WriteAllBytes(zipPath, bytes);
-        }
-
-        ZipFile.ExtractToDirectory(zipPath, extractPath);
-        var sourcePath = FindUpdateSourcePath(extractPath);
-        var exePath = Assembly.GetExecutingAssembly().Location;
-        var appPath = Path.GetDirectoryName(exePath);
-        var scriptPath = Path.Combine(updateRoot, "finish-update.cmd");
-        File.WriteAllText(scriptPath, CreateUpdateScript(Process.GetCurrentProcess().Id, sourcePath, appPath, exePath, updateRoot));
-
-        Process.Start(new ProcessStartInfo
-        {
-            FileName = scriptPath,
-            UseShellExecute = true,
-            WindowStyle = ProcessWindowStyle.Hidden
-        });
     }
 
     private static void OpenUrl(string url)
@@ -203,44 +136,10 @@ public static class GitHubUpdateChecker
             Math.Max(0, version.Build));
     }
 
-    private static string FormatVersion(Version version)
+    public static string FormatVersion(Version version)
     {
         var normalized = NormalizeVersion3(version);
         return normalized.Major + "." + normalized.Minor + "." + normalized.Build;
-    }
-
-    private static string FindUpdateSourcePath(string extractPath)
-    {
-        var exeName = Path.GetFileName(Assembly.GetExecutingAssembly().Location);
-        if (File.Exists(Path.Combine(extractPath, exeName)))
-        {
-            return extractPath;
-        }
-
-        var directories = Directory.GetDirectories(extractPath);
-        if (directories.Length == 1 && File.Exists(Path.Combine(directories[0], exeName)))
-        {
-            return directories[0];
-        }
-
-        return extractPath;
-    }
-
-    private static string CreateUpdateScript(int processId, string sourcePath, string appPath, string exePath, string updateRoot)
-    {
-        return "@echo off\r\n"
-            + "setlocal\r\n"
-            + "set \"PID=" + processId + "\"\r\n"
-            + ":wait\r\n"
-            + "tasklist /FI \"PID eq %PID%\" | find \"%PID%\" >nul\r\n"
-            + "if not errorlevel 1 (\r\n"
-            + "  timeout /t 1 /nobreak >nul\r\n"
-            + "  goto wait\r\n"
-            + ")\r\n"
-            + "robocopy \"" + sourcePath + "\" \"" + appPath + "\" /E /NFL /NDL /NJH /NJS /NC /NS >nul\r\n"
-            + "start \"\" \"" + exePath + "\"\r\n"
-            + "rmdir /s /q \"" + updateRoot + "\"\r\n"
-            + "del \"%~f0\"\r\n";
     }
 
     private sealed class ReleaseAsset

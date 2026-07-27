@@ -15,7 +15,7 @@ public partial class MainWindow : Window
         0x2D, 0x43, 0x6F, 0x6E, 0x66, 0x69, 0x67, 0x75,
         0x72, 0x61, 0x74, 0x69, 0x6F, 0x6E, 0x2D, 0x00
     };
-    private string[] _selectedFiles = new string[0];
+    private string _selectedFile;
 
     public MainWindow()
     {
@@ -27,7 +27,18 @@ public partial class MainWindow : Window
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
-        await GitHubUpdateChecker.CheckForUpdatesAsync(this);
+        try
+        {
+            var release = await GitHubUpdateChecker.GetLatestReleaseAsync();
+            if (GitHubUpdateChecker.IsNewerThanCurrent(release))
+            {
+                AppendLog("New version available: " + GitHubUpdateChecker.FormatVersion(release.Version) + " | " + release.Url);
+            }
+        }
+        catch
+        {
+            AppendLog("Update check skipped: GitHub is unavailable");
+        }
     }
 
     private void Browse_Click(object sender, RoutedEventArgs e)
@@ -35,20 +46,20 @@ public partial class MainWindow : Window
         var dialog = new OpenFileDialog
         {
             Filter = "Binary files|*.bin;*.rom;*.fd;*.cap;*.dat|All files|*.*",
-            Multiselect = true
+            Multiselect = false
         };
 
         if (dialog.ShowDialog(this) == true)
         {
-            _selectedFiles = dialog.FileNames;
-            FilePathBox.Text = string.Join(Environment.NewLine, _selectedFiles);
-            AppendLog("Selected " + _selectedFiles.Length + " file(s)");
+            _selectedFile = dialog.FileName;
+            FilePathBox.Text = _selectedFile;
+            AppendLog("Selected " + _selectedFile);
         }
     }
 
     private void ClearSelection_Click(object sender, RoutedEventArgs e)
     {
-        _selectedFiles = new string[0];
+        _selectedFile = null;
         FilePathBox.Clear();
         AppendLog("Selection cleared");
     }
@@ -58,12 +69,48 @@ public partial class MainWindow : Window
         GitHubUpdateChecker.OpenRepository();
     }
 
+    private void ClearLog_Click(object sender, RoutedEventArgs e)
+    {
+        LogBox.Clear();
+    }
+
+    private void SaveLog_Click(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrEmpty(LogBox.Text))
+        {
+            AppendLog("Save log skipped: log is empty");
+            return;
+        }
+
+        var dialog = new SaveFileDialog
+        {
+            FileName = "XGecuMetaCleaner-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".log",
+            Filter = "Log files|*.log|Text files|*.txt|All files|*.*"
+        };
+
+        if (dialog.ShowDialog(this) != true)
+        {
+            AppendLog("Save log canceled");
+            return;
+        }
+
+        try
+        {
+            File.WriteAllText(dialog.FileName, LogBox.Text);
+            AppendLog("Log saved " + dialog.FileName);
+        }
+        catch (Exception ex)
+        {
+            AppendLog("Save log failed: " + ex.Message);
+        }
+    }
+
     private void Clean_Click(object sender, RoutedEventArgs e)
     {
         var files = GetSelectedFiles();
         if (files.Length == 0)
         {
-            MessageBox.Show(this, "Please select file(s) first", "Clean", MessageBoxButton.OK, MessageBoxImage.Information);
+            AppendLog("Clean skipped: please select file(s) first");
             return;
         }
 
@@ -88,7 +135,7 @@ public partial class MainWindow : Window
             }
         }
 
-        MessageBox.Show(this, "Clean completed\r\nOK: " + ok + "\r\nFailed/skipped: " + failed, "Clean", MessageBoxButton.OK, failed == 0 ? MessageBoxImage.Information : MessageBoxImage.Warning);
+        AppendLog("Clean completed | OK: " + ok + " | Failed/skipped: " + failed);
     }
 
     private async void FindWinKey_Click(object sender, RoutedEventArgs e)
@@ -96,7 +143,7 @@ public partial class MainWindow : Window
         var files = GetSelectedFiles();
         if (files.Length == 0)
         {
-            MessageBox.Show(this, "Please select file(s) first", "Find WinKey", MessageBoxButton.OK, MessageBoxImage.Information);
+            AppendLog("Find WinKey skipped: please select file(s) first");
             return;
         }
 
@@ -110,7 +157,7 @@ public partial class MainWindow : Window
                 AppendLog(line);
             }
 
-            MessageBox.Show(this, "Find completed\r\nCandidates: " + result.Total + "\r\nFailed: " + result.Failed, "Find WinKey", MessageBoxButton.OK, result.Total > 0 && result.Failed == 0 ? MessageBoxImage.Information : MessageBoxImage.Warning);
+            AppendLog("Find completed | Candidates: " + result.Total + " | Failed: " + result.Failed);
         }
         finally
         {
@@ -143,10 +190,7 @@ public partial class MainWindow : Window
                 result.Total += candidates.Count;
                 foreach (var candidate in candidates)
                 {
-                    result.LogLines.Add(candidate.Key
-                        + " | offset 0x" + candidate.Offset.ToString("X")
-                        + " | " + candidate.Method
-                        + " | " + candidate.Classification);
+                    result.LogLines.Add(FormatWinKeyCandidate(candidate));
                 }
             }
             catch (Exception ex)
@@ -159,10 +203,17 @@ public partial class MainWindow : Window
         return result;
     }
 
+    private static string FormatWinKeyCandidate(WinKeyCandidate candidate)
+    {
+        return "Found at offset 0x" + candidate.Offset.ToString("X")
+            + " | " + candidate.Key
+            + " | " + candidate.Classification;
+    }
+
     private string[] GetSelectedFiles()
     {
-        return _selectedFiles.Length > 0
-            ? _selectedFiles
+        return !string.IsNullOrWhiteSpace(_selectedFile)
+            ? new[] { _selectedFile }
             : string.IsNullOrWhiteSpace(FilePathBox.Text) ? new string[0] : new[] { FilePathBox.Text.Trim() };
     }
 

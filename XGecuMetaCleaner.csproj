@@ -5,16 +5,13 @@
     <UseWPF>true</UseWPF>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
-    <ApplicationIcon>icon.ico</ApplicationIcon>
     <AssemblyName>XGecu Meta Cleaner</AssemblyName>
     <RootNamespace>XGecuMetaCleaner</RootNamespace>
-    <Version>1.0.1</Version>
+    <Version>1.0.2</Version>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <Product>XGecu Meta Cleaner</Product>
     <Description>XGecu Meta Cleaner</Description>
     <Company>mhqb365.com</Company>
-    <Authors>mhqb365.com</Authors>
-    <Copyright>mhqb365.com</Copyright>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
     <DebugType>none</DebugType>
