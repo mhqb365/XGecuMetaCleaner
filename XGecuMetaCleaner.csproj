@@ -5,6 +5,7 @@
     <UseWPF>true</UseWPF>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
+    <ApplicationIcon>icon.ico</ApplicationIcon>
     <AssemblyName>XGecu Meta Cleaner</AssemblyName>
     <RootNamespace>XGecuMetaCleaner</RootNamespace>
     <Version>1.0.2</Version>
