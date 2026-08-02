@@ -6,9 +6,9 @@
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
     <ApplicationIcon>icon.ico</ApplicationIcon>
-    <AssemblyName>XGecu Meta Cleaner</AssemblyName>
+    <AssemblyName>XGecuMetaCleaner</AssemblyName>
     <RootNamespace>XGecuMetaCleaner</RootNamespace>
-    <Version>1.0.2</Version>
+    <Version>1.0.3</Version>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <Product>XGecu Meta Cleaner</Product>
     <Description>XGecu Meta Cleaner</Description>

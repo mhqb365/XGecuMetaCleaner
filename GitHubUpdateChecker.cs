@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Net.Http;
 using System.Reflection;
@@ -22,6 +23,7 @@ public sealed class GitHubReleaseInfo
 public static class GitHubUpdateChecker
 {
     public const string RepositoryUrl = "https://github.com/mhqb365/XGecuMetaCleaner";
+    public const string AppExeName = "XGecuMetaCleaner.exe";
     private const string LatestReleaseApiUrl = "https://api.github.com/repos/mhqb365/XGecuMetaCleaner/releases/latest";
 
     public static Version CurrentVersion
@@ -69,6 +71,45 @@ public static class GitHubUpdateChecker
     public static void OpenRepository()
     {
         OpenUrl(RepositoryUrl);
+    }
+
+    public static async Task<string> DownloadInstallAndRestartAsync(GitHubReleaseInfo release)
+    {
+        if (release == null || string.IsNullOrWhiteSpace(release.AssetUrl))
+        {
+            return "No .zip release asset found";
+        }
+
+        var updateRoot = Path.Combine(Path.GetTempPath(), "XGecuMetaCleanerUpdate-" + Guid.NewGuid().ToString("N"));
+        var zipPath = Path.Combine(updateRoot, release.AssetName);
+        var extractPath = Path.Combine(updateRoot, "extracted");
+        Directory.CreateDirectory(updateRoot);
+        Directory.CreateDirectory(extractPath);
+
+        using (var client = new HttpClient())
+        {
+            client.Timeout = TimeSpan.FromMinutes(3);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("XGecuMetaCleaner/" + CurrentVersion);
+            var bytes = await client.GetByteArrayAsync(release.AssetUrl);
+            File.WriteAllBytes(zipPath, bytes);
+        }
+
+        ZipFile.ExtractToDirectory(zipPath, extractPath);
+        var sourcePath = FindUpdateSourcePath(extractPath);
+        var exePath = Assembly.GetExecutingAssembly().Location;
+        var appPath = Path.GetDirectoryName(exePath);
+        var launchPath = Path.Combine(appPath, AppExeName);
+        var scriptPath = Path.Combine(updateRoot, "finish-update.cmd");
+        File.WriteAllText(scriptPath, CreateUpdateScript(Process.GetCurrentProcess().Id, sourcePath, appPath, launchPath, exePath, updateRoot));
+
+        Process.Start(new ProcessStartInfo
+        {
+            FileName = scriptPath,
+            UseShellExecute = true,
+            WindowStyle = ProcessWindowStyle.Hidden
+        });
+
+        return "Update downloaded. Restarting with " + AppExeName;
     }
 
     private static void OpenUrl(string url)
@@ -140,6 +181,59 @@ public static class GitHubUpdateChecker
     {
         var normalized = NormalizeVersion3(version);
         return normalized.Major + "." + normalized.Minor + "." + normalized.Build;
+    }
+
+    private static string FindUpdateSourcePath(string extractPath)
+    {
+        if (File.Exists(Path.Combine(extractPath, AppExeName)))
+        {
+            return extractPath;
+        }
+
+        foreach (var directory in Directory.GetDirectories(extractPath, "*", SearchOption.AllDirectories))
+        {
+            if (File.Exists(Path.Combine(directory, AppExeName)))
+            {
+                return directory;
+            }
+        }
+
+        var currentExeName = Path.GetFileName(Assembly.GetExecutingAssembly().Location);
+        if (File.Exists(Path.Combine(extractPath, currentExeName)))
+        {
+            return extractPath;
+        }
+
+        foreach (var directory in Directory.GetDirectories(extractPath, "*", SearchOption.AllDirectories))
+        {
+            if (File.Exists(Path.Combine(directory, currentExeName)))
+            {
+                return directory;
+            }
+        }
+
+        return extractPath;
+    }
+
+    private static string CreateUpdateScript(int processId, string sourcePath, string appPath, string launchPath, string oldExePath, string updateRoot)
+    {
+        return "@echo off\r\n"
+            + "setlocal\r\n"
+            + "set \"PID=" + processId + "\"\r\n"
+            + ":wait\r\n"
+            + "tasklist /FI \"PID eq %PID%\" | find \"%PID%\" >nul\r\n"
+            + "if not errorlevel 1 (\r\n"
+            + "  timeout /t 1 /nobreak >nul\r\n"
+            + "  goto wait\r\n"
+            + ")\r\n"
+            + "robocopy \"" + sourcePath + "\" \"" + appPath + "\" /E /NFL /NDL /NJH /NJS /NC /NS >nul\r\n"
+            + "if exist \"" + launchPath + "\" (\r\n"
+            + "  start \"\" \"" + launchPath + "\"\r\n"
+            + ") else (\r\n"
+            + "  start \"\" \"" + oldExePath + "\"\r\n"
+            + ")\r\n"
+            + "rmdir /s /q \"" + updateRoot + "\"\r\n"
+            + "del \"%~f0\"\r\n";
     }
 
     private sealed class ReleaseAsset

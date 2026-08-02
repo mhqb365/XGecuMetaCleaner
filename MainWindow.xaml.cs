@@ -10,6 +10,7 @@ namespace XGecuMetaCleaner
 public partial class MainWindow : Window
 {
     private const int TailScanBytes = 1024 * 1024;
+    private const int MinRomSizeBytes = 512 * 1024;
     private static readonly byte[] MetadataMarker =
     {
         0x2D, 0x43, 0x6F, 0x6E, 0x66, 0x69, 0x67, 0x75,
@@ -33,6 +34,14 @@ public partial class MainWindow : Window
             if (GitHubUpdateChecker.IsNewerThanCurrent(release))
             {
                 AppendLog("New version available: " + GitHubUpdateChecker.FormatVersion(release.Version) + " | " + release.Url);
+                if (string.IsNullOrWhiteSpace(release.AssetUrl))
+                {
+                    AppendLog("Update skipped: no .zip release asset found");
+                    return;
+                }
+
+                AppendLog(await GitHubUpdateChecker.DownloadInstallAndRestartAsync(release));
+                Application.Current.Shutdown();
             }
         }
         catch
@@ -228,11 +237,12 @@ public partial class MainWindow : Window
         try
         {
             var buffer = File.ReadAllBytes(path);
-            var cutOffset = FindMetadataOffset(buffer);
+            var cleanOffset = FindCleanOffset(buffer);
+            var cutOffset = cleanOffset.Offset;
             if (cutOffset < 0)
             {
-                log.Add("No metadata marker found in the last " + FormatBytes(Math.Min(TailScanBytes, buffer.Length)));
-                return CleanResult.Fail("No metadata marker found", log);
+                log.Add("No size overflow or metadata marker found");
+                return CleanResult.Fail("No metadata found", log);
             }
 
             if (cutOffset == 0)
@@ -254,6 +264,7 @@ public partial class MainWindow : Window
             }
 
             log.Add("Removed " + FormatBytes(buffer.Length - cutOffset) + " from 0x" + cutOffset.ToString("X") + " to EOF");
+            log.Add("Clean method: " + cleanOffset.Method);
             log.Add("Cleaned file size: " + FormatBytes(cutOffset));
             return CleanResult.Ok("metadata removed successfully", log);
         }
@@ -262,6 +273,31 @@ public partial class MainWindow : Window
             log.Add("Clean failed: " + ex.Message);
             return CleanResult.Fail(ex.Message, log);
         }
+    }
+
+    private static CleanOffset FindCleanOffset(byte[] buffer)
+    {
+        var sizeOffset = FindSizeOverflowOffset(buffer.Length);
+        if (sizeOffset > 0)
+        {
+            return new CleanOffset(sizeOffset, "size overflow");
+        }
+
+        var markerOffset = FindMetadataOffset(buffer);
+        return markerOffset < 0
+            ? CleanOffset.NotFound()
+            : new CleanOffset(markerOffset, "metadata marker");
+    }
+
+    private static int FindSizeOverflowOffset(int fileSize)
+    {
+        var size = MinRomSizeBytes;
+        while (size <= fileSize / 2)
+        {
+            size *= 2;
+        }
+
+        return fileSize > size ? size : -1;
     }
 
     private static int FindMetadataOffset(byte[] buffer)
@@ -355,6 +391,23 @@ public sealed class CleanResult
     public static CleanResult Fail(string message, List<string> logLines)
     {
         return new CleanResult(false, message, logLines);
+    }
+}
+
+public sealed class CleanOffset
+{
+    public CleanOffset(int offset, string method)
+    {
+        Offset = offset;
+        Method = method;
+    }
+
+    public int Offset { get; }
+    public string Method { get; }
+
+    public static CleanOffset NotFound()
+    {
+        return new CleanOffset(-1, null);
     }
 }
 
